@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Construction Change-Order & Permit OS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body
+    data-auth-required="{{ 'true' if auth_required else 'false' }}"
+    data-can-write="{{ 'true' if permissions.can_write else 'false' }}"
+    data-can-manage-users="{{ 'true' if permissions.can_manage_users else 'false' }}"
+    data-can-approve-financials="{{ 'true' if permissions.can_approve_financials else 'false' }}"
+    data-csrf-token="{{ csrf_token }}"
+    data-current-user="{{ current_user.username if current_user else '' }}"
+    data-current-role="{{ current_user.role if current_user else '' }}"
+    data-workspace-name="{{ workspace.name if workspace else 'Open workspace' }}"
+  >
+    <main class="shell">
+      <section class="hero panel">
+        <div class="hero-copy">
+          <p class="eyebrow">Permit Control Meets Financial Execution</p>
+          <h1>Keep permit blockers, change exposure, and approval flow in one operating system.</h1>
+          <p class="lede">
+            Construction Change-Order & Permit OS gives commercial GC teams a daily workspace for
+            permit risk, scope drift, subcontractor pricing, owner approvals, and exportable change-order packages.
+          </p>
+          <div class="hero-tags">
+            <span class="pill">Multi-tenant SaaS</span>
+            <span class="pill">Permit register</span>
+            <span class="pill">Change-order workflow</span>
+            <span class="pill">Audit ready</span>
+          </div>
+        </div>
+        <div class="hero-side">
+          <div class="hero-status">
+            <span class="pill" id="workspace-badge">{{ workspace.name if workspace else "Open workspace" }}</span>
+            <span class="muted-text" id="current-user-badge">
+              {% if current_user %}
+              Signed in as {{ current_user.username }}.
+              {% else %}
+              Local workspace mode.
+              {% endif %}
+            </span>
+          </div>
+          <div class="project-actions">
+            <button id="refresh-workspace" class="primary" type="button">Refresh workspace</button>
+            {% if auth_required %}
+            <button id="logout" class="ghost danger" type="button">Log out</button>
+            {% endif %}
+          </div>
+          <div id="status-banner" class="status-banner muted-text">
+            Loading workspace data...
+          </div>
+        </div>
+      </section>
+
+      <section class="metric-grid" id="dashboard-metrics">
+        <article class="metric-card">
+          <span class="metric-label">Active projects</span>
+          <strong id="metric-projects">0</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Permits at risk</span>
+          <strong id="metric-permits-risk">0</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Pending approvals</span>
+          <strong id="metric-approvals">0</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">At-risk cost</span>
+          <strong id="metric-cost">$0</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Schedule slip</span>
+          <strong id="metric-schedule">0 days</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Notification backlog</span>
+          <strong id="metric-notifications">0</strong>
+        </article>
+      </section>
+
+      <section class="layout">
+        <aside class="sidebar panel">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Workspace</p>
+              <h2>Projects</h2>
+            </div>
+            <button id="export-selected-project" class="ghost small" type="button">Export JSON</button>
+          </div>
+          <div id="project-list" class="project-list empty-state">No projects yet.</div>
+
+          <div class="divider"></div>
+
+          <form id="project-form" class="stack">
+            <div class="section-header compact">
+              <div>
+                <p class="eyebrow">Create</p>
+                <h3>New project</h3>
+              </div>
+            </div>
+            <label>
+              Project name
+              <input name="name" type="text" required minlength="3" maxlength="160" />
+            </label>
+            <label>
+              Project code
+              <input name="project_code" type="text" required minlength="2" maxlength="40" />
+            </label>
+            <label>
+              Client name
+              <input name="client_name" type="text" required minlength="2" maxlength="160" />
+            </label>
+            <label>
+              Location
+              <input name="location" type="text" required minlength="2" maxlength="160" />
+            </label>
+            <div class="field-row">
+              <label>
+                Sector
+                <select name="sector">
+                  <option value="industrial">Industrial</option>
+                  <option value="office">Office</option>
+                  <option value="retail">Retail</option>
+                  <option value="healthcare">Healthcare</option>
+                  <option value="hospitality">Hospitality</option>
+                  <option value="mixed_use">Mixed use</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label>
+                Status
+                <select name="status">
+                  <option value="precon">Precon</option>
+                  <option value="active">Active</option>
+                  <option value="closeout">Closeout</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </label>
+            </div>
+            <div class="field-row">
+              <label>
+                Contract value (USD)
+                <input name="contract_value_usd" type="number" min="0" step="1000" value="0" />
+              </label>
+              <label>
+                Target margin (%)
+                <input name="target_margin_pct" type="number" min="0" max="100" step="0.1" value="0" />
+              </label>
+            </div>
+            <div class="field-row">
+              <label>
+                Start date
+                <input name="start_date" type="date" />
+              </label>
+              <label>
+                End date
+                <input name="end_date" type="date" />
+              </label>
+            </div>
+            <label>
+              Notes
+              <textarea name="notes" rows="4" maxlength="4000"></textarea>
+            </label>
+            <button type="submit" class="primary full-width">Create project</button>
+          </form>
+        </aside>
+
+        <section class="workspace">
+          <section class="panel project-panel">
+            <div class="project-header">
+              <div>
+                <p class="eyebrow">Selected project</p>
+                <h2 id="project-name">No project selected</h2>
+                <p id="project-subtitle" class="muted-text">
+                  Pick a project to manage permits, scope drift, and approvals.
+                </p>
+              </div>
+              <div class="project-actions">
+                <button id="download-permit-template" class="ghost small" type="button">Permit template</button>
+                <button id="download-change-event-template" class="ghost small" type="button">Change template</button>
+                <button id="delete-project" class="ghost danger small" type="button" disabled>Delete project</button>
+              </div>
+            </div>
+            <div class="metric-grid compact-metrics">
+              <article class="metric-card">
+                <span class="metric-label">Permits</span>
+                <strong id="selected-project-permits">0</strong>
+              </article>
+              <article class="metric-card">
+                <span class="metric-label">Change events</span>
+                <strong id="selected-project-events">0</strong>
+              </article>
+              <article class="metric-card">
+                <span class="metric-label">Pending COs</span>
+                <strong id="selected-project-pending">0</strong>
+              </article>
+              <article class="metric-card">
+                <span class="metric-label">At-risk cost</span>
+                <strong id="selected-project-cost">$0</strong>
+              </article>
+            </div>
+            <div id="project-notes" class="project-notes muted-text">
+              Project notes will appear here when a project is selected.
+            </div>
+          </section>
+
+          <section class="workspace-grid">
+            <div class="panel">
+              <div class="section-header compact">
+                <div>
+                  <p class="eyebrow">Permit register</p>
+                  <h3>Add permit</h3>
+                </div>
+              </div>
+              <form id="permit-form" class="stack disabled-stack">
+                <label>
+                  Permit name
+                  <input name="name" type="text" required minlength="2" maxlength="160" />
+                </label>
+                <label>
+                  Jurisdiction
+                  <input name="jurisdiction" type="text" required minlength="2" maxlength="160" />
+                </label>
+                <div class="field-row">
+                  <label>
+                    Package
+                    <input name="package_name" type="text" maxlength="160" />
+                  </label>
+                  <label>
+                    Permit number
+                    <input name="permit_number" type="text" maxlength="80" />
+                  </label>
+                </div>
+                <div class="field-row">
+                  <label>
+                    Status
+                    <select name="status">
+                      <option value="draft">Draft</option>
+                      <option value="submitted">Submitted</option>
+                      <option value="revision_requested">Revision requested</option>
+                      <option value="approved">Approved</option>
+                      <option value="inspection_pending">Inspection pending</option>
+                      <option value="closed">Closed</option>
+                      <option value="expired">Expired</option>
+                    </select>
+                  </label>
+                  <label>
+                    Inspection
+                    <select name="inspection_status">
+                      <option value="not_scheduled">Not scheduled</option>
+                      <option value="scheduled">Scheduled</option>
+                      <option value="passed">Passed</option>
+                      <option value="failed">Failed</option>
+                      <option value="rescheduled">Rescheduled</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="field-row">
+                  <label>
+                    Submission due
+                    <input name="submission_due_date" type="date" />
+                  </label>
+                  <label>
+                    Inspection due
+                    <input name="inspection_due_date" type="date" />
+                  </label>
+                </div>
+                <label>
+                  Current blocker
+                  <textarea name="current_blocker" rows="3" maxlength="2000"></textarea>
+                </label>
+                <label>
+                  Notes
+                  <textarea name="notes" rows="3" maxlength="4000"></textarea>
+                </label>
+                <button type="submit" class="primary full-width" disabled>Add permit</button>
+              </form>
+
+              <div class="divider"></div>
+
+              <div class="stack">
+                <div class="section-header compact">
+                  <div>
+                    <p class="eyebrow">Bulk intake</p>
+                    <h3>Import permit CSV</h3>
+                  </div>
+                </div>
+                <label>
+                  CSV file
+                  <input id="permit-import-file" type="file" accept=".csv,text/csv" />
+                </label>
+                <button id="import-permits" class="ghost full-width" type="button" disabled>Import permits</button>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="section-header compact">
+                <div>
+                  <p class="eyebrow">Permit register</p>
+                  <h3>Tracked permits</h3>
+                </div>
+              </div>
+              <div id="permit-list" class="site-list empty-state">
+                Select a project to view permits.
+              </div>
+            </div>
+          </section>
+
+          <section class="workspace-grid">
+            <div class="panel">
+              <div class="section-header compact">
+                <div>
+                  <p class="eyebrow">Change management</p>
+                  <h3>Create change event</h3>
+                </div>
+              </div>
+              <form id="change-event-form" class="stack disabled-stack">
+                <label>
+                  Title
+                  <input name="title" type="text" required minlength="3" maxlength="180" />
+                </label>
+                <div class="field-row">
+                  <label>
+                    Source
+                    <select name="source_type">
+                      <option value="owner_request">Owner request</option>
+                      <option value="permit_issue">Permit issue</option>
+                      <option value="field_issue">Field issue</option>
+                      <option value="rfi">RFI</option>
+                      <option value="design_change">Design change</option>
+                      <option value="schedule_delay">Schedule delay</option>
+                    </select>
+                  </label>
+                  <label>
+                    Status
+                    <select name="status">
+                      <option value="draft">Draft</option>
+                      <option value="pricing_requested">Pricing requested</option>
+                      <option value="priced">Priced</option>
+                      <option value="internal_review">Internal review</option>
+                      <option value="owner_submitted">Owner submitted</option>
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                      <option value="executed">Executed</option>
+                    </select>
+                  </label>
+                </div>
+                <label>
+                  Affected scope
+                  <input name="affected_scope" type="text" maxlength="180" />
+                </label>
+                <div class="field-row">
+                  <label>
+                    Subcontractor
+                    <input name="subcontractor_name" type="text" maxlength="140" />
+                  </label>
+                  <label>
+                    Owner reference
+                    <input name="owner_reference" type="text" maxlength="120" />
+                  </label>
+                </div>
+                <div class="field-row">
+                  <label>
+                    Cost impact (USD)
+                    <input name="cost_impact_usd" type="number" min="0" step="0.01" value="0" />
+                  </label>
+                  <label>
+                    Schedule impact (days)
+                    <input name="schedule_impact_days" type="number" min="0" value="0" />
+                  </label>
+                </div>
+                <label>
+                  Required action date
+                  <input name="required_action_date" type="date" />
+                </label>
+                <label>
+                  Summary
+                  <textarea name="summary" rows="3" maxlength="4000"></textarea>
+                </label>
+                <label>
+                  Notes
+                  <textarea name="notes" rows="3" maxlength="4000"></textarea>
+                </label>
+                <button type="submit" class="primary full-width" disabled>Create change event</button>
+              </form>
+            </div>
+
+            <div class="panel">
+              <div class="section-header compact">
+                <div>
+                  <p class="eyebrow">Linked workflow</p>
+                  <h3>Change events</h3>
+                </div>
+              </div>
+              <div id="change-event-list" class="site-list empty-state">
+                Select a project to view change events.
+              </div>
+            </div>
+          </section>
+
+          <section class="results-grid">
+            <div class="panel">
+              <div class="section-header compact">
+                <div>
+                  <p class="eyebrow">Selected workflow</p>
+                  <h3 id="workflow-title">No change event selected</h3>
+                </div>
+              </div>
+              <div id="workflow-summary" class="empty-state">
+                Select a change event to create RFQs, quotes, and change orders.
+              </div>
+
+              <div class="divider"></div>
+
+              <form id="rfq-form" class="stack disabled-stack">
+                <div class="section-header compact">
+                  <div>
+                    <p class="eyebrow">Pricing</p>
+                    <h3>Create RFQ</h3>
+                  </div>
+                </div>
+                <label>
+                  Subcontractor
+                  <input name="subcontractor_name" type="text" minlength="2" maxlength="140" />
+                </label>
+                <label>
+                  Scope summary
+                  <textarea name="scope_summary" rows="3" maxlength="4000"></textarea>
+                </label>
+                <div class="field-row">
+                  <label>
+                    Status
+                    <select name="status">
+                      <option value="draft">Draft</option>
+                      <option value="sent">Sent</option>
+                      <option value="received">Received</option>
+                      <option value="closed">Closed</option>
+                    </select>
+                  </label>
+                  <label>
+                    Due date
+                    <input name="due_at" type="date" />
+                  </label>
+                </div>
+                <button type="submit" class="ghost full-width" disabled>Create RFQ</button>
+              </form>
+
+              <div class="divider"></div>
+
+              <form id="quote-form" class="stack disabled-stack">
+                <div class="section-header compact">
+                  <div>
+                    <p class="eyebrow">Pricing</p>
+                    <h3>Record quote</h3>
+                  </div>
+                </div>
+                <label>
+                  Subcontractor
+                  <input name="subcontractor_name" type="text" minlength="2" maxlength="140" />
+                </label>
+                <div class="field-row">
+                  <label>
+                    Amount (USD)
+                    <input name="amount_usd" type="number" min="0" step="0.01" value="0" />
+                  </label>
+                  <label>
+                    Quote date
+                    <input name="quoted_at" type="date" />
+                  </label>
+                </div>
+                <label class="checkbox-row">
+                  <input name="is_selected" type="checkbox" />
+                  Mark as selected quote
+                </label>
+                <label>
+                  Inclusions
+                  <textarea name="inclusions" rows="2" maxlength="4000"></textarea>
+                </label>
+                <label>
+                  Exclusions
+                  <textarea name="exclusions" rows="2" maxlength="4000"></textarea>
+                </label>
+                <button type="submit" class="ghost full-width" disabled>Record quote</button>
+              </form>
+
+              <div class="divider"></div>
+
+              <form id="change-order-form" class="stack disabled-stack">
+                <div class="section-header compact">
+                  <div>
+                    <p class="eyebrow">Financial package</p>
+                    <h3>Create change order</h3>
+                  </div>
+                </div>
+                <div class="field-row">
+                  <label>
+                    Kind
+                    <select name="kind">
+                      <option value="owner">Owner</option>
+                      <option value="subcontract">Subcontract</option>
+                    </select>
+                  </label>
+                  <label>
+                    Number
+                    <input name="number" type="text" minlength="2" maxlength="60" />
+                  </label>
+                </div>
+                <label>
+                  Title
+                  <input name="title" type="text" minlength="3" maxlength="180" />
+                </label>
+                <div class="field-row">
+                  <label>
+                    Amount (USD)
+                    <input name="amount_usd" type="number" min="0" step="0.01" value="0" />
+                  </label>
+                  <label>
+                    Schedule impact (days)
+                    <input name="schedule_impact_days" type="number" min="0" value="0" />
+                  </label>
+                </div>
+                <label>
+                  Description
+                  <textarea name="description" rows="3" maxlength="4000"></textarea>
+                </label>
+                <button type="submit" class="primary full-width" disabled>Create change order</button>
+              </form>
+            </div>
+
+            <div class="panel">
+              <div class="section-header compact">
+                <div>
+                  <p class="eyebrow">Approval rail</p>
+                  <h3>Packages and approvals</h3>
+                </div>
+              </div>
+              <div class="project-actions">
+                <button id="submit-selected-approval" class="primary small" type="button" disabled>
+                  Submit selected order
+                </button>
+                <button id="download-owner-package" class="ghost small" type="button" disabled>
+                  Download owner package
+                </button>
+              </div>
+              <div id="change-order-list" class="site-list empty-state">
+                Create or select a change event to see packaged change orders.
+              </div>
+              <pre id="owner-package-preview" class="memo-output">Owner package preview will appear here.</pre>
+            </div>
+          </section>
+
+          <section class="results-grid">
+            <div id="admin-panel" class="panel">
+              <div class="section-header compact">
+                <div>
+                  <p class="eyebrow">Workspace access</p>
+                  <h3>Team</h3>
+                </div>
+              </div>
+              <div id="admin-status" class="status-banner muted-text">
+                Admin access is required to manage workspace users.
+              </div>
+              <form id="user-form" class="stack">
+                <label>
+                  Username
+                  <input name="username" type="text" minlength="3" maxlength="50" />
+                </label>
+                <label>
+                  Email
+                  <input name="email" type="email" maxlength="255" />
+                </label>
+                <label>
+                  Full name
+                  <input name="full_name" type="text" maxlength="120" />
+                </label>
+                <div class="field-row">
+                  <label>
+                    Role
+                    <select name="role">
+                      <option value="project_engineer">Project engineer</option>
+                      <option value="project_manager">Project manager</option>
+                      <option value="finance_approver">Finance approver</option>
+                      <option value="workspace_admin">Workspace admin</option>
+                      <option value="viewer">Viewer</option>
+                    </select>
+                  </label>
+                  <label>
+                    Password
+                    <input name="password" type="password" minlength="8" maxlength="200" />
+                  </label>
+                </div>
+                <button type="submit" class="primary full-width">Create user</button>
+              </form>
+              <div id="user-list" class="site-list empty-state">No workspace users loaded yet.</div>
+            </div>
+
+            <div class="panel">
+              <div class="section-header compact">
+                <div>
+                  <p class="eyebrow">Audit</p>
+                  <h3>Recent activity</h3>
+                </div>
+              </div>
+              <div id="activity-list" class="site-list empty-state">Loading activity...</div>
+            </div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

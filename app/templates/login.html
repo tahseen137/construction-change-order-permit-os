@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Construction Change-Order & Permit OS Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="login-shell">
+      <section class="login-card panel">
+        <div class="stack">
+          <p class="eyebrow">Secure Workspace</p>
+          <h1>Construction Change-Order & Permit OS</h1>
+          <p class="muted-text">
+            Sign in to manage permit blockers, scope changes, pricing workflows, and owner approval packages.
+          </p>
+        </div>
+
+        <form id="login-form" class="stack">
+          <input id="next-path" type="hidden" value="{{ next_path }}" />
+          <label>
+            Username
+            <input id="username" type="text" autocomplete="username" required />
+          </label>
+          <label>
+            Password
+            <input id="password" type="password" autocomplete="current-password" required />
+          </label>
+          <button type="submit" class="primary full-width">Sign in</button>
+        </form>
+
+        <div id="login-status" class="status-banner muted-text">
+          Enter your workspace credentials to continue.
+        </div>
+      </section>
+    </main>
+
+    <script src="/static/login.js"></script>
+  </body>
+</html>
