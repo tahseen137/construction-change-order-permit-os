@@ -1,16 +1,21 @@
 databases:
   - name: construction-change-order-permit-os-db
-    plan: basic_256mb
+    plan: basic-256mb
     databaseName: constructionops
     user: constructionops
+    postgresMajorVersion: "16"
 
 services:
   - type: web
     name: construction-change-order-permit-os
     runtime: docker
     plan: starter
-    autoDeploy: true
+    autoDeployTrigger: commit
     healthCheckPath: /health
+    disk:
+      name: construction-change-order-permit-os-disk
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: APP_ENV
         value: production
@@ -38,6 +43,8 @@ services:
         value: "true"
       - key: STORAGE_BACKEND
         value: local
+      - key: UPLOADS_DIR
+        value: /var/data/uploads
       - key: POSTMARK_SERVER_TOKEN
         sync: false
       - key: POSTMARK_FROM_EMAIL
